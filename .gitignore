@@ -1,0 +1,112 @@
+# ============================================================
+# LUMORA — Production Project
+# ============================================================
+
+# -------------------------
+# Secrets & Environment
+# -------------------------
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+
+# -------------------------
+# Node / Backend
+# -------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+dist/
+build/
+coverage/
+.nyc_output/
+
+# -------------------------
+# Logs
+# -------------------------
+*.log
+logs/
+
+# -------------------------
+# OS Files
+# -------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# -------------------------
+# IDE / Editor
+# -------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+.idea/
+*.swp
+*.swo
+
+# -------------------------
+# Unity
+# -------------------------
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+MemoryCaptures/
+Recordings/
+
+.vs/
+.idea/
+
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+
+# Unity generated files
+sysinfo.txt
+
+# -------------------------
+# Android
+# -------------------------
+.gradle/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# -------------------------
+# Test / Coverage
+# -------------------------
+test-results/
+reports/
+
+# -------------------------
+# Temporary files
+# -------------------------
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# -------------------------
+# Generated secrets/config
+# -------------------------
+secrets/
+private/
+credentials/
