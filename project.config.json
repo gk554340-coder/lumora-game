@@ -1,0 +1,33 @@
+{
+  "project": {
+    "name": "LUMORA",
+    "codename": "lumora",
+    "version": "0.1.0",
+    "environment": "development"
+  },
+  "game": {
+    "type": "endless_puzzle_adventure",
+    "progression": "infinite",
+    "serverAuthoritative": true
+  },
+  "economy": {
+    "primaryCurrency": "token",
+    "premiumCurrency": "gem"
+  },
+  "features": {
+    "dailyRewards": true,
+    "missions": true,
+    "streaks": true,
+    "events": true,
+    "leaderboards": true,
+    "collection": true,
+    "notifications": true,
+    "advertising": true,
+    "inAppPurchases": true
+  },
+  "security": {
+    "clientTrusted": false,
+    "serverAuthoritativeEconomy": true,
+    "auditLogging": true
+  }
+}
