@@ -10,25 +10,25 @@ import { registerErrorHandler } from "./plugins/error-handler.js";
 export function buildApp(): FastifyInstance {
   const app = Fastify({
     logger: {
-      level: env.logLevel
-    }
+      level: env.logLevel,
+    },
   });
 
   app.register(helmet);
 
   app.register(cors, {
-    origin: env.corsOrigin ?? false
+    origin: env.corsOrigin ?? false,
   });
 
   app.register(rateLimit, {
-    max: 100,
-    timeWindow: "1 minute"
+    max: env.rateLimitMax,
+    timeWindow: env.rateLimitTimeWindow,
   });
 
   registerErrorHandler(app);
 
   app.register(routes, {
-    prefix: "/api"
+    prefix: "/api",
   });
 
   return app;
