@@ -1,39 +1,58 @@
-import type { FastifyError, FastifyPluginAsync } from "fastify";
+import type { FastifyError, FastifyInstance } from "fastify";
 
 import { AppError } from "../errors/AppError.js";
 
-const errorHandler: FastifyPluginAsync = async (app) => {
-  app.setErrorHandler((error: FastifyError, request, reply) => {
-    request.log.error(error);
+export function registerErrorHandler(app: FastifyInstance): void {
+  app.setErrorHandler(
+    (error: FastifyError, request, reply) => {
+      request.log.error(
+        {
+          err: error,
+          requestId: request.id
+        },
+        "Request failed"
+      );
 
-    if (error instanceof AppError) {
-      return reply.status(error.statusCode).send({
-        success: false,
-        error: {
-          code: error.code,
-          message: error.message
-        }
-      });
-    }
-
-    if (error.validation) {
-      return reply.status(400).send({
-        success: false,
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "Request validation failed."
-        }
-      });
-    }
-
-    return reply.status(500).send({
-      success: false,
-      error: {
-        code: "INTERNAL_SERVER_ERROR",
-        message: "An unexpected error occurred."
+      if (error instanceof AppError) {
+        return reply.status(error.statusCode).send({
+          success: false,
+          error: {
+            code: error.code,
+            message: error.message
+          }
+        });
       }
-    });
-  });
-};
 
-export default errorHandler;
+      if (error.validation) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Request validation failed."
+          }
+        });
+      }
+
+      const statusCode =
+        typeof error.statusCode === "number" &&
+        error.statusCode >= 400 &&
+        error.statusCode <= 599
+          ? error.statusCode
+          : 500;
+
+      return reply.status(statusCode).send({
+        success: false,
+        error: {
+          code:
+            statusCode === 500
+              ? "INTERNAL_SERVER_ERROR"
+              : "REQUEST_ERROR",
+          message:
+            statusCode === 500
+              ? "An unexpected error occurred."
+              : error.message
+        }
+      });
+    }
+  );
+}
