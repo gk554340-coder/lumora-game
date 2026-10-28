@@ -4,6 +4,8 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 
 import { env } from "./config/env.js";
+import routes from "./routes/index.js";
+import errorHandler from "./plugins/error-handler.js";
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({
@@ -23,14 +25,8 @@ export function buildApp(): FastifyInstance {
     timeWindow: "1 minute"
   });
 
-  app.get("/health", async () => {
-    return {
-      status: "ok",
-      service: env.appName,
-      version: env.appVersion,
-      environment: env.nodeEnv
-    };
-  });
+  app.register(errorHandler);
+  app.register(routes);
 
   return app;
 }
