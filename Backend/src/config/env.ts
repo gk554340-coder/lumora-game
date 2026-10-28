@@ -2,12 +2,24 @@ import "dotenv/config";
 
 export type NodeEnvironment = "development" | "test" | "production";
 
+export type LogLevel =
+  | "fatal"
+  | "error"
+  | "warn"
+  | "info"
+  | "debug"
+  | "trace"
+  | "silent";
+
 const MAX_SESSION_TOKEN_BYTES = 64;
 const MAX_SESSION_TTL_SECONDS = 31_536_000;
 const MAX_SESSION_TOKEN_LENGTH = 1024;
 const MAX_SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS = 31_536_000;
 
-const VALID_LOG_LEVELS = [
+const MAX_RATE_LIMIT_MAX = 100_000;
+const MAX_RATE_LIMIT_TIME_WINDOW_MS = 86_400_000;
+
+const VALID_LOG_LEVELS: readonly LogLevel[] = [
   "fatal",
   "error",
   "warn",
@@ -15,7 +27,7 @@ const VALID_LOG_LEVELS = [
   "debug",
   "trace",
   "silent",
-] as const;
+];
 
 function getEnvironment(): NodeEnvironment {
   const value = process.env.NODE_ENV?.trim() || "development";
@@ -41,7 +53,7 @@ function getOptionalString(name: string): string | undefined {
 function getRequiredString(name: string): string {
   const value = getOptionalString(name);
 
-  if (!value) {
+  if (value === undefined) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
 
@@ -64,15 +76,15 @@ function getPort(): number {
   return port;
 }
 
-function getOptionalInteger(
+function getInteger(
   name: string,
   minimum: number,
   maximum: number,
-): number | undefined {
+): number {
   const rawValue = getOptionalString(name);
 
   if (rawValue === undefined) {
-    return undefined;
+    throw new Error(`Missing required environment variable: ${name}`);
   }
 
   if (!/^\d+$/.test(rawValue)) {
@@ -96,16 +108,16 @@ function getOptionalInteger(
   return value;
 }
 
-function getLogLevel(): (typeof VALID_LOG_LEVELS)[number] {
+function getLogLevel(): LogLevel {
   const value = getOptionalString("LOG_LEVEL") ?? "info";
 
-  if (!(VALID_LOG_LEVELS as readonly string[]).includes(value)) {
+  if (!VALID_LOG_LEVELS.includes(value as LogLevel)) {
     throw new Error(
       `Invalid LOG_LEVEL: "${value}". Expected one of: ${VALID_LOG_LEVELS.join(", ")}.`,
     );
   }
 
-  return value as (typeof VALID_LOG_LEVELS)[number];
+  return value as LogLevel;
 }
 
 function getCorsOrigin(): string | undefined {
@@ -115,13 +127,11 @@ function getCorsOrigin(): string | undefined {
     return undefined;
   }
 
-  if (value === "*") {
-    throw new Error(
-      'CORS_ORIGIN must not be "*". Configure explicit trusted origins.',
-    );
-  }
-
   const origins = value.split(",").map((origin) => origin.trim());
+
+  if (origins.some((origin) => origin.length === 0)) {
+    throw new Error("CORS_ORIGIN contains an empty origin.");
+  }
 
   for (const origin of origins) {
     let parsedOrigin: URL;
@@ -133,8 +143,11 @@ function getCorsOrigin(): string | undefined {
     }
 
     if (
-      !["http:", "https:"].includes(parsedOrigin.protocol) ||
-      parsedOrigin.origin !== origin
+      (parsedOrigin.protocol !== "http:" &&
+        parsedOrigin.protocol !== "https:") ||
+      parsedOrigin.origin !== origin ||
+      parsedOrigin.username !== "" ||
+      parsedOrigin.password !== ""
     ) {
       throw new Error(`Invalid CORS_ORIGIN entry: "${origin}".`);
     }
@@ -145,45 +158,41 @@ function getCorsOrigin(): string | undefined {
 
 const nodeEnv = getEnvironment();
 
-const sessionTokenBytes = getOptionalInteger(
+const sessionTokenBytes = getInteger(
   "SESSION_TOKEN_BYTES",
   1,
   MAX_SESSION_TOKEN_BYTES,
 );
 
-const sessionTtlSeconds = getOptionalInteger(
+const sessionTtlSeconds = getInteger(
   "SESSION_TTL_SECONDS",
   1,
   MAX_SESSION_TTL_SECONDS,
 );
 
-const sessionMaxTokenLength = getOptionalInteger(
+const sessionMaxTokenLength = getInteger(
   "SESSION_MAX_TOKEN_LENGTH",
   1,
   MAX_SESSION_TOKEN_LENGTH,
 );
 
-const sessionLastUsedUpdateIntervalSeconds = getOptionalInteger(
+const sessionLastUsedUpdateIntervalSeconds = getInteger(
   "SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS",
   0,
   MAX_SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS,
 );
 
-const sessionSettings = [
-  ["SESSION_TOKEN_BYTES", sessionTokenBytes],
-  ["SESSION_TTL_SECONDS", sessionTtlSeconds],
-  ["SESSION_MAX_TOKEN_LENGTH", sessionMaxTokenLength],
-  [
-    "SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS",
-    sessionLastUsedUpdateIntervalSeconds,
-  ],
-] as const;
+const rateLimitMax = getInteger(
+  "RATE_LIMIT_MAX",
+  1,
+  MAX_RATE_LIMIT_MAX,
+);
 
-for (const [name, value] of sessionSettings) {
-  if (value === undefined) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-}
+const rateLimitTimeWindow = getInteger(
+  "RATE_LIMIT_TIME_WINDOW_MS",
+  1,
+  MAX_RATE_LIMIT_TIME_WINDOW_MS,
+);
 
 const minimumEncodedTokenLength = Math.ceil(
   (sessionTokenBytes * 8) / 6,
@@ -208,6 +217,8 @@ export const env = Object.freeze({
   sessionTtlSeconds,
   sessionMaxTokenLength,
   sessionLastUsedUpdateIntervalSeconds,
+  rateLimitMax,
+  rateLimitTimeWindow,
 });
 
 export function requireProductionSecrets(): void {
