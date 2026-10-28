@@ -1,4 +1,13 @@
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client";
+import { env } from "./env.js";
+import { databaseConfig } from "./database.js";
+
+const adapter = new PrismaPg({
+  connectionString: databaseConfig.url,
+  max: databaseConfig.maxConnections,
+  connectionTimeoutMillis: databaseConfig.connectionTimeoutMs,
+});
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -7,13 +16,14 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
+    adapter,
     log:
-      process.env.NODE_ENV === "production"
+      env.nodeEnv === "production"
         ? ["error"]
         : ["warn", "error"],
   });
 
-if (process.env.NODE_ENV !== "production") {
+if (env.nodeEnv !== "production") {
   globalForPrisma.prisma = prisma;
 }
 
