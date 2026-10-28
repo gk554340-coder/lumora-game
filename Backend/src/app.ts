@@ -5,7 +5,7 @@ import rateLimit from "@fastify/rate-limit";
 
 import { env } from "./config/env.js";
 import routes from "./routes/index.js";
-import errorHandler from "./plugins/error-handler.js";
+import { registerErrorHandler } from "./plugins/error-handler.js";
 
 export function buildApp(): FastifyInstance {
   const app = Fastify({
@@ -25,7 +25,7 @@ export function buildApp(): FastifyInstance {
     timeWindow: "1 minute"
   });
 
-  app.register(errorHandler);
+  registerErrorHandler(app);
 
   app.register(routes, {
     prefix: "/api"
