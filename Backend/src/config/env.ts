@@ -1,7 +1,11 @@
-
 import "dotenv/config";
 
 export type NodeEnvironment = "development" | "test" | "production";
+
+const MAX_SESSION_TOKEN_BYTES = 64;
+const MAX_SESSION_TTL_SECONDS = 31_536_000;
+const MAX_SESSION_TOKEN_LENGTH = 1024;
+const MAX_SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS = 31_536_000;
 
 function getEnvironment(): NodeEnvironment {
   const value = process.env.NODE_ENV?.trim() || "development";
@@ -12,7 +16,7 @@ function getEnvironment(): NodeEnvironment {
     value !== "production"
   ) {
     throw new Error(
-      `Invalid NODE_ENV: "${value}". Expected development, test, or production.`
+      `Invalid NODE_ENV: "${value}". Expected development, test, or production.`,
     );
   }
 
@@ -52,7 +56,8 @@ function getPort(): number {
 
 function getOptionalInteger(
   name: string,
-  minimum: number
+  minimum: number,
+  maximum: number,
 ): number | undefined {
   const rawValue = getOptionalString(name);
 
@@ -62,15 +67,19 @@ function getOptionalInteger(
 
   if (!/^\d+$/.test(rawValue)) {
     throw new Error(
-      `Invalid ${name}. Expected an integer >= ${minimum}.`
+      `Invalid ${name}. Expected an integer between ${minimum} and ${maximum}.`,
     );
   }
 
   const value = Number(rawValue);
 
-  if (!Number.isSafeInteger(value) || value < minimum) {
+  if (
+    !Number.isSafeInteger(value) ||
+    value < minimum ||
+    value > maximum
+  ) {
     throw new Error(
-      `Invalid ${name}. Expected an integer >= ${minimum}.`
+      `Invalid ${name}. Expected an integer between ${minimum} and ${maximum}.`,
     );
   }
 
@@ -81,22 +90,26 @@ const nodeEnv = getEnvironment();
 
 const sessionTokenBytes = getOptionalInteger(
   "SESSION_TOKEN_BYTES",
-  1
+  1,
+  MAX_SESSION_TOKEN_BYTES,
 );
 
 const sessionTtlSeconds = getOptionalInteger(
   "SESSION_TTL_SECONDS",
-  1
+  1,
+  MAX_SESSION_TTL_SECONDS,
 );
 
 const sessionMaxTokenLength = getOptionalInteger(
   "SESSION_MAX_TOKEN_LENGTH",
-  1
+  1,
+  MAX_SESSION_TOKEN_LENGTH,
 );
 
 const sessionLastUsedUpdateIntervalSeconds = getOptionalInteger(
   "SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS",
-  0
+  0,
+  MAX_SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS,
 );
 
 const sessionSettings = [
@@ -105,60 +118,41 @@ const sessionSettings = [
   ["SESSION_MAX_TOKEN_LENGTH", sessionMaxTokenLength],
   [
     "SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS",
-    sessionLastUsedUpdateIntervalSeconds
-  ]
+    sessionLastUsedUpdateIntervalSeconds,
+  ],
 ] as const;
 
-if (nodeEnv === "production") {
-  for (const [name, value] of sessionSettings) {
-    if (value === undefined) {
-      throw new Error(
-        `Missing required environment variable: ${name}`
-      );
-    }
+for (const [name, value] of sessionSettings) {
+  if (value === undefined) {
+    throw new Error(`Missing required environment variable: ${name}`);
   }
 }
 
-if (
-  sessionTokenBytes !== undefined &&
-  sessionMaxTokenLength !== undefined
-) {
-  const minimumEncodedTokenLength = Math.ceil(
-    (sessionTokenBytes * 8) / 6
+const minimumEncodedTokenLength = Math.ceil(
+  (sessionTokenBytes! * 8) / 6,
+);
+
+if (sessionMaxTokenLength! < minimumEncodedTokenLength) {
+  throw new Error(
+    "SESSION_MAX_TOKEN_LENGTH is too small for SESSION_TOKEN_BYTES.",
   );
-
-  if (sessionMaxTokenLength < minimumEncodedTokenLength) {
-    throw new Error(
-      "SESSION_MAX_TOKEN_LENGTH is too small for SESSION_TOKEN_BYTES."
-    );
-  }
 }
 
-export const env = {
+export const env = Object.freeze({
   nodeEnv,
-
   port: getPort(),
-
-  appName: process.env.APP_NAME?.trim() || "LUMORA Backend",
-
-  appVersion: process.env.APP_VERSION?.trim() || "0.1.0",
-
+  appName: getOptionalString("APP_NAME") ?? "LUMORA Backend",
+  appVersion: getOptionalString("APP_VERSION") ?? "0.1.0",
   databaseUrl: getOptionalString("DATABASE_URL"),
-
   jwtSecret: getOptionalString("JWT_SECRET"),
-
   corsOrigin: getOptionalString("CORS_ORIGIN"),
-
-  logLevel: process.env.LOG_LEVEL?.trim() || "info",
-
-  sessionTokenBytes,
-
-  sessionTtlSeconds,
-
-  sessionMaxTokenLength,
-
-  sessionLastUsedUpdateIntervalSeconds
-} as const;
+  logLevel: getOptionalString("LOG_LEVEL") ?? "info",
+  sessionTokenBytes: sessionTokenBytes!,
+  sessionTtlSeconds: sessionTtlSeconds!,
+  sessionMaxTokenLength: sessionMaxTokenLength!,
+  sessionLastUsedUpdateIntervalSeconds:
+    sessionLastUsedUpdateIntervalSeconds!,
+});
 
 export function requireProductionSecrets(): void {
   if (env.nodeEnv !== "production") {
