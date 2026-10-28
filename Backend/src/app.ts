@@ -26,7 +26,10 @@ export function buildApp(): FastifyInstance {
   });
 
   app.register(errorHandler);
-  app.register(routes);
+
+  app.register(routes, {
+    prefix: "/api"
+  });
 
   return app;
 }
