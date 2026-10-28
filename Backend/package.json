@@ -4,11 +4,11 @@
   "private": true,
   "description": "Secure backend services for the LUMORA mobile game",
   "type": "module",
-  "main": "dist/server.js",
+  "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
   "engines": {
