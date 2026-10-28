@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 export type NodeEnvironment = "development" | "test" | "production";
 
 function getEnvironment(): NodeEnvironment {
