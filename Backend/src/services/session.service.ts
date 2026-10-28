@@ -1,9 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import {
-  Prisma,
-  SessionStatus,
-} from "../generated/prisma/client";
+import { SessionStatus } from "../generated/prisma/client";
 import { prisma } from "../config/prisma.js";
 
 export interface SessionServiceConfig {
@@ -25,41 +22,74 @@ export interface ValidatedSession {
   expiresAt: Date;
 }
 
+const MAX_SESSION_TOKEN_BYTES = 64;
+const MAX_SESSION_TTL_SECONDS = 31_536_000;
+const MAX_SESSION_TOKEN_LENGTH = 1024;
+
 function hashSessionToken(token: string): string {
-  return createHash("sha256").update(token, "utf8").digest("hex");
+  return createHash("sha256")
+    .update(token, "utf8")
+    .digest("hex");
 }
 
 function createSessionExpiry(
   now: Date,
   ttlSeconds: number,
 ): Date {
-  return new Date(now.getTime() + ttlSeconds * 1000);
+  const expiresAt = new Date(
+    now.getTime() + ttlSeconds * 1000,
+  );
+
+  if (!Number.isFinite(expiresAt.getTime())) {
+    throw new Error("Invalid session expiration time.");
+  }
+
+  return expiresAt;
 }
 
 function validateConfiguration(
   config: SessionServiceConfig,
 ): void {
-  if (!Number.isInteger(config.tokenBytes) || config.tokenBytes <= 0) {
+  if (
+    !Number.isSafeInteger(config.tokenBytes) ||
+    config.tokenBytes < 1 ||
+    config.tokenBytes > MAX_SESSION_TOKEN_BYTES
+  ) {
     throw new Error("Invalid session token byte configuration.");
   }
 
-  if (!Number.isInteger(config.ttlSeconds) || config.ttlSeconds <= 0) {
+  if (
+    !Number.isSafeInteger(config.ttlSeconds) ||
+    config.ttlSeconds < 1 ||
+    config.ttlSeconds > MAX_SESSION_TTL_SECONDS
+  ) {
     throw new Error("Invalid session TTL configuration.");
   }
 
   if (
-    !Number.isInteger(config.maxTokenLength) ||
-    config.maxTokenLength <= 0
+    !Number.isSafeInteger(config.maxTokenLength) ||
+    config.maxTokenLength < 1 ||
+    config.maxTokenLength > MAX_SESSION_TOKEN_LENGTH
   ) {
     throw new Error("Invalid session token length configuration.");
   }
 
   if (
-    !Number.isInteger(config.lastUsedUpdateIntervalSeconds) ||
+    !Number.isSafeInteger(config.lastUsedUpdateIntervalSeconds) ||
     config.lastUsedUpdateIntervalSeconds < 0
   ) {
     throw new Error(
       "Invalid session last-used update interval configuration.",
+    );
+  }
+
+  const minimumEncodedTokenLength = Math.ceil(
+    (config.tokenBytes * 8) / 6,
+  );
+
+  if (config.maxTokenLength < minimumEncodedTokenLength) {
+    throw new Error(
+      "Session token length is too small for the configured token size.",
     );
   }
 }
@@ -68,20 +98,17 @@ function validateToken(
   token: string,
   config: SessionServiceConfig,
 ): string {
-  if (typeof token !== "string") {
-    throw new Error("Invalid session token.");
-  }
-
-  const normalizedToken = token.trim();
-
   if (
-    normalizedToken.length === 0 ||
-    normalizedToken.length > config.maxTokenLength
+    typeof token !== "string" ||
+    token.length === 0 ||
+    token.length > config.maxTokenLength ||
+    token.trim() !== token ||
+    !/^[A-Za-z0-9_-]+$/.test(token)
   ) {
     throw new Error("Invalid session token.");
   }
 
-  return normalizedToken;
+  return token;
 }
 
 export async function createSession(
@@ -90,7 +117,10 @@ export async function createSession(
 ): Promise<CreatedSession> {
   validateConfiguration(config);
 
-  if (!userId) {
+  if (
+    typeof userId !== "string" ||
+    userId.trim().length === 0
+  ) {
     throw new Error("User ID is required to create a session.");
   }
 
@@ -143,11 +173,7 @@ export async function validateSession(
     },
   });
 
-  if (!session) {
-    return null;
-  }
-
-  if (session.status !== SessionStatus.ACTIVE) {
+  if (!session || session.status !== SessionStatus.ACTIVE) {
     return null;
   }
 
@@ -156,6 +182,9 @@ export async function validateSession(
       where: {
         id: session.id,
         status: SessionStatus.ACTIVE,
+        expiresAt: {
+          lte: now,
+        },
       },
       data: {
         status: SessionStatus.EXPIRED,
@@ -171,7 +200,7 @@ export async function validateSession(
       config.lastUsedUpdateIntervalSeconds * 1000;
 
   if (lastUsedUpdateDue) {
-    await prisma.session.updateMany({
+    const updateResult = await prisma.session.updateMany({
       where: {
         id: session.id,
         status: SessionStatus.ACTIVE,
@@ -183,6 +212,10 @@ export async function validateSession(
         lastUsedAt: now,
       },
     });
+
+    if (updateResult.count === 0) {
+      return null;
+    }
   }
 
   return {
@@ -195,7 +228,10 @@ export async function validateSession(
 export async function revokeSession(
   sessionId: string,
 ): Promise<boolean> {
-  if (!sessionId) {
+  if (
+    typeof sessionId !== "string" ||
+    sessionId.trim().length === 0
+  ) {
     return false;
   }
 
@@ -216,7 +252,10 @@ export async function revokeSession(
 export async function revokeAllUserSessions(
   userId: string,
 ): Promise<number> {
-  if (!userId) {
+  if (
+    typeof userId !== "string" ||
+    userId.trim().length === 0
+  ) {
     return 0;
   }
 
