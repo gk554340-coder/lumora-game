@@ -8,6 +8,7 @@ import {
 const app = buildApp();
 
 let shuttingDown = false;
+let startupCompleted = false;
 
 const start = async (): Promise<void> => {
   try {
@@ -20,6 +21,8 @@ const start = async (): Promise<void> => {
       host: "0.0.0.0",
     });
 
+    startupCompleted = true;
+
     app.log.info(
       {
         port: env.port,
@@ -31,6 +34,15 @@ const start = async (): Promise<void> => {
     app.log.error(error, "Failed to start LUMORA backend");
 
     try {
+      await app.close();
+    } catch (closeError) {
+      app.log.error(
+        closeError,
+        "Failed to close application after startup failure",
+      );
+    }
+
+    try {
       await disconnectDatabase();
     } catch (disconnectError) {
       app.log.error(
@@ -39,12 +51,16 @@ const start = async (): Promise<void> => {
       );
     }
 
-    process.exit(1);
+    process.exitCode = 1;
   }
 };
 
 const shutdown = async (signal: string): Promise<void> => {
   if (shuttingDown) {
+    app.log.warn(
+      { signal },
+      "Shutdown already in progress",
+    );
     return;
   }
 
@@ -52,16 +68,32 @@ const shutdown = async (signal: string): Promise<void> => {
 
   app.log.info({ signal }, "Graceful shutdown started");
 
-  try {
-    await app.close();
-    await disconnectDatabase();
+  let shutdownFailed = false;
 
-    app.log.info("LUMORA backend shutdown completed");
-    process.exit(0);
-  } catch (error) {
-    app.log.error(error, "Graceful shutdown failed");
-    process.exit(1);
+  if (startupCompleted) {
+    try {
+      await app.close();
+    } catch (error) {
+      shutdownFailed = true;
+      app.log.error(error, "Failed to close application");
+    }
   }
+
+  try {
+    await disconnectDatabase();
+  } catch (error) {
+    shutdownFailed = true;
+    app.log.error(error, "Failed to disconnect database");
+  }
+
+  if (shutdownFailed) {
+    app.log.error("LUMORA backend shutdown completed with errors");
+    process.exitCode = 1;
+    return;
+  }
+
+  app.log.info("LUMORA backend shutdown completed");
+  process.exitCode = 0;
 };
 
 process.once("SIGINT", () => {
