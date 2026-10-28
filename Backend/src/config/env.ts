@@ -7,6 +7,16 @@ const MAX_SESSION_TTL_SECONDS = 31_536_000;
 const MAX_SESSION_TOKEN_LENGTH = 1024;
 const MAX_SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS = 31_536_000;
 
+const VALID_LOG_LEVELS = [
+  "fatal",
+  "error",
+  "warn",
+  "info",
+  "debug",
+  "trace",
+  "silent",
+] as const;
+
 function getEnvironment(): NodeEnvironment {
   const value = process.env.NODE_ENV?.trim() || "development";
 
@@ -86,6 +96,53 @@ function getOptionalInteger(
   return value;
 }
 
+function getLogLevel(): (typeof VALID_LOG_LEVELS)[number] {
+  const value = getOptionalString("LOG_LEVEL") ?? "info";
+
+  if (!(VALID_LOG_LEVELS as readonly string[]).includes(value)) {
+    throw new Error(
+      `Invalid LOG_LEVEL: "${value}". Expected one of: ${VALID_LOG_LEVELS.join(", ")}.`,
+    );
+  }
+
+  return value as (typeof VALID_LOG_LEVELS)[number];
+}
+
+function getCorsOrigin(): string | undefined {
+  const value = getOptionalString("CORS_ORIGIN");
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === "*") {
+    throw new Error(
+      'CORS_ORIGIN must not be "*". Configure explicit trusted origins.',
+    );
+  }
+
+  const origins = value.split(",").map((origin) => origin.trim());
+
+  for (const origin of origins) {
+    let parsedOrigin: URL;
+
+    try {
+      parsedOrigin = new URL(origin);
+    } catch {
+      throw new Error(`Invalid CORS_ORIGIN entry: "${origin}".`);
+    }
+
+    if (
+      !["http:", "https:"].includes(parsedOrigin.protocol) ||
+      parsedOrigin.origin !== origin
+    ) {
+      throw new Error(`Invalid CORS_ORIGIN entry: "${origin}".`);
+    }
+  }
+
+  return origins.join(",");
+}
+
 const nodeEnv = getEnvironment();
 
 const sessionTokenBytes = getOptionalInteger(
@@ -129,10 +186,10 @@ for (const [name, value] of sessionSettings) {
 }
 
 const minimumEncodedTokenLength = Math.ceil(
-  (sessionTokenBytes! * 8) / 6,
+  (sessionTokenBytes * 8) / 6,
 );
 
-if (sessionMaxTokenLength! < minimumEncodedTokenLength) {
+if (sessionMaxTokenLength < minimumEncodedTokenLength) {
   throw new Error(
     "SESSION_MAX_TOKEN_LENGTH is too small for SESSION_TOKEN_BYTES.",
   );
@@ -145,13 +202,12 @@ export const env = Object.freeze({
   appVersion: getOptionalString("APP_VERSION") ?? "0.1.0",
   databaseUrl: getOptionalString("DATABASE_URL"),
   jwtSecret: getOptionalString("JWT_SECRET"),
-  corsOrigin: getOptionalString("CORS_ORIGIN"),
-  logLevel: getOptionalString("LOG_LEVEL") ?? "info",
-  sessionTokenBytes: sessionTokenBytes!,
-  sessionTtlSeconds: sessionTtlSeconds!,
-  sessionMaxTokenLength: sessionMaxTokenLength!,
-  sessionLastUsedUpdateIntervalSeconds:
-    sessionLastUsedUpdateIntervalSeconds!,
+  corsOrigin: getCorsOrigin(),
+  logLevel: getLogLevel(),
+  sessionTokenBytes,
+  sessionTtlSeconds,
+  sessionMaxTokenLength,
+  sessionLastUsedUpdateIntervalSeconds,
 });
 
 export function requireProductionSecrets(): void {
