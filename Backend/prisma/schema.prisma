@@ -1,0 +1,828 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  runtime             = "nodejs"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+//
+// ============================================================
+// ENUMS
+// ============================================================
+//
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum DevicePlatform {
+  ANDROID
+  IOS
+  WEB
+}
+
+enum SessionStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum LevelStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum LevelType {
+  GENERATED
+  CURATED
+}
+
+enum AttemptStatus {
+  STARTED
+  COMPLETED
+  ABANDONED
+}
+
+enum CurrencyType {
+  TOKEN
+  COIN
+  GEM
+}
+
+enum WalletTransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum WalletTransactionSource {
+  GAMEPLAY
+  REWARD
+  PURCHASE
+  BONUS
+  REFUND
+  REVERSAL
+  ADMIN
+  EVENT
+  ACHIEVEMENT
+  SYSTEM
+}
+
+enum RewardType {
+  CURRENCY
+  ITEM
+  BOOSTER
+  EXPERIENCE
+}
+
+enum RewardStatus {
+  PENDING
+  GRANTED
+  CLAIMED
+  REVOKED
+  EXPIRED
+}
+
+enum InventoryItemType {
+  BOOSTER
+  CONSUMABLE
+  COSMETIC
+  SPECIAL
+}
+
+enum PurchaseStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  CANCELLED
+  FAILED
+}
+
+enum PaymentStatus {
+  CREATED
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  CANCELLED
+}
+
+enum PaymentProvider {
+  RAZORPAY
+}
+
+enum EventStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum AchievementStatus {
+  LOCKED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum NotificationType {
+  SYSTEM
+  REWARD
+  EVENT
+  PROGRESSION
+  SECURITY
+  PROMOTION
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  READ
+  FAILED
+}
+
+enum LeaderboardType {
+  GLOBAL
+  EVENT
+  LEVEL
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  REWARD
+  WALLET_CREDIT
+  WALLET_DEBIT
+  PAYMENT
+  REFUND
+  ADMIN_ACTION
+  SECURITY_EVENT
+}
+
+//
+// ============================================================
+// USER / ACCOUNT
+// ============================================================
+//
+
+model User {
+  id            String     @id @default(uuid()) @db.Uuid
+  email         String?    @unique @db.VarChar(320)
+  username      String?    @unique @db.VarChar(32)
+  status        UserStatus @default(ACTIVE)
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  lastLoginAt   DateTime?
+
+  profile       PlayerProfile?
+  devices       Device[]
+  sessions      Session[]
+
+  wallet        Wallet?
+
+  progress      PlayerProgress[]
+  attempts      LevelAttempt[]
+
+  rewardGrants  RewardGrant[]
+  purchases     Purchase[]
+  payments      Payment[]
+
+  inventory     InventoryEntry[]
+
+  eventEntries  EventParticipation[]
+
+  achievements  PlayerAchievement[]
+
+  leaderboardEntries LeaderboardEntry[]
+
+  notifications Notification[]
+
+  auditLogs     AuditLog[]
+
+  idempotencyKeys IdempotencyKey[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model PlayerProfile {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @unique @db.Uuid
+
+  displayName String?  @db.VarChar(50)
+  avatarUrl   String?  @db.VarChar(500)
+  experience  Int      @default(0)
+  level       Int      @default(1)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Device {
+  id           String         @id @default(uuid()) @db.Uuid
+  userId       String         @db.Uuid
+
+  platform     DevicePlatform
+  deviceIdHash String         @db.VarChar(128)
+  deviceName   String?        @db.VarChar(150)
+
+  isTrusted    Boolean        @default(false)
+  lastSeenAt   DateTime       @default(now())
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([platform, deviceIdHash])
+  @@index([userId])
+}
+
+model Session {
+  id           String        @id @default(uuid()) @db.Uuid
+  userId       String        @db.Uuid
+
+  tokenHash    String        @unique @db.VarChar(128)
+  status       SessionStatus @default(ACTIVE)
+
+  expiresAt    DateTime
+  lastUsedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  revokedAt    DateTime?
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([expiresAt])
+}
+
+//
+// ============================================================
+// GAME / LEVEL SYSTEM
+// ============================================================
+//
+
+model GameLevel {
+  id              String      @id @default(uuid()) @db.Uuid
+
+  levelNumber     Int         @unique
+  status          LevelStatus @default(DRAFT)
+  type            LevelType   @default(GENERATED)
+
+  difficultyTier  Int
+  difficultyScore Int
+
+  generationSeed  String?     @db.VarChar(128)
+  configuration   Json
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  publishedAt     DateTime?
+  archivedAt      DateTime?
+
+  progress        PlayerProgress[]
+  attempts        LevelAttempt[]
+
+  @@index([status, levelNumber])
+  @@index([difficultyTier])
+}
+
+model PlayerProgress {
+  id                String   @id @default(uuid()) @db.Uuid
+
+  userId            String   @db.Uuid
+  levelId           String   @db.Uuid
+
+  completed         Boolean  @default(false)
+  bestScore         Int      @default(0)
+  bestTimeMs        Int?
+  attemptsCount     Int      @default(0)
+  stars             Int      @default(0)
+
+  firstCompletedAt  DateTime?
+  lastPlayedAt      DateTime?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  level             GameLevel  @relation(fields: [levelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, levelId])
+  @@index([userId, completed])
+  @@index([levelId])
+}
+
+model LevelAttempt {
+  id              String        @id @default(uuid()) @db.Uuid
+
+  userId          String        @db.Uuid
+  levelId         String        @db.Uuid
+
+  attemptNumber   Int
+  status          AttemptStatus @default(STARTED)
+
+  score           Int?
+  timeMs          Int?
+  moves           Int?
+  clientSeed      String?       @db.VarChar(128)
+  serverSeed      String?       @db.VarChar(128)
+
+  startedAt       DateTime      @default(now())
+  completedAt     DateTime?
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  level           GameLevel     @relation(fields: [levelId], references: [id], onDelete: Cascade)
+
+  @@index([userId, levelId])
+  @@index([userId, startedAt])
+  @@index([levelId, status])
+}
+
+//
+// ============================================================
+// REWARD SYSTEM
+// ============================================================
+//
+
+model RewardDefinition {
+  id             String     @id @default(uuid()) @db.Uuid
+
+  name           String     @db.VarChar(100)
+  description    String?    @db.VarChar(500)
+
+  type           RewardType
+  configuration  Json
+
+  isActive       Boolean    @default(true)
+
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  grants         RewardGrant[]
+
+  @@index([type, isActive])
+}
+
+model RewardGrant {
+  id                String       @id @default(uuid()) @db.Uuid
+
+  userId            String       @db.Uuid
+  rewardDefinitionId String      @db.Uuid
+
+  status            RewardStatus @default(PENDING)
+
+  sourceType        WalletTransactionSource?
+  sourceId          String?      @db.VarChar(128)
+
+  grantedAt         DateTime?
+  claimedAt         DateTime?
+  expiresAt         DateTime?
+
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rewardDefinition  RewardDefinition @relation(fields: [rewardDefinitionId], references: [id], onDelete: Restrict)
+
+  walletTransactions WalletTransaction[]
+
+  @@index([userId, status])
+  @@index([rewardDefinitionId])
+  @@index([expiresAt])
+}
+
+//
+// ============================================================
+// WALLET / ECONOMY
+// ============================================================
+//
+
+model Wallet {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @unique @db.Uuid
+
+  tokenBalance Int     @default(0)
+  coinBalance  Int     @default(0)
+  gemBalance   Int     @default(0)
+
+  version     Int      @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactions WalletTransaction[]
+}
+
+model WalletTransaction {
+  id             String                   @id @default(uuid()) @db.Uuid
+
+  walletId       String                   @db.Uuid
+  userId         String                   @db.Uuid
+
+  currency       CurrencyType
+  type           WalletTransactionType
+  source         WalletTransactionSource
+
+  amount         Int
+  balanceAfter   Int
+
+  description    String?                  @db.VarChar(500)
+
+  rewardGrantId  String?                  @db.Uuid
+  purchaseId     String?                  @db.Uuid
+
+  idempotencyKey String?                  @unique @db.VarChar(128)
+
+  createdAt      DateTime                 @default(now())
+
+  wallet         Wallet                   @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  rewardGrant    RewardGrant?             @relation(fields: [rewardGrantId], references: [id], onDelete: Restrict)
+  purchase       Purchase?               @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+
+  @@index([userId, currency, createdAt])
+  @@index([walletId, createdAt])
+  @@index([source, createdAt])
+}
+
+//
+// ============================================================
+// PRODUCTS / PURCHASES / PAYMENTS
+// ============================================================
+//
+
+model PurchaseProduct {
+  id             String   @id @default(uuid()) @db.Uuid
+
+  sku            String   @unique @db.VarChar(100)
+  name           String   @db.VarChar(150)
+
+  currency       String   @db.VarChar(10)
+  priceMinorUnit Int
+
+  tokenAmount    Int      @default(0)
+  coinAmount     Int      @default(0)
+  gemAmount      Int      @default(0)
+
+  isActive       Boolean  @default(true)
+
+  metadata       Json?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  purchases      Purchase[]
+
+  @@index([isActive])
+}
+
+model Purchase {
+  id             String         @id @default(uuid()) @db.Uuid
+
+  userId         String         @db.Uuid
+  productId      String         @db.Uuid
+
+  status         PurchaseStatus @default(PENDING)
+
+  amountMinorUnit Int
+  currency       String         @db.VarChar(10)
+
+  idempotencyKey String         @unique @db.VarChar(128)
+
+  createdAt      DateTime       @default(now())
+  completedAt    DateTime?
+  refundedAt     DateTime?
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  product        PurchaseProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  payments       Payment[]
+  walletTransactions WalletTransaction[]
+
+  @@index([userId, status])
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model Payment {
+  id                    String          @id @default(uuid()) @db.Uuid
+
+  userId                String          @db.Uuid
+  purchaseId            String          @db.Uuid
+
+  provider              PaymentProvider @default(RAZORPAY)
+  status                PaymentStatus   @default(CREATED)
+
+  providerOrderId       String          @unique @db.VarChar(128)
+  providerPaymentId     String?         @unique @db.VarChar(128)
+
+  amountMinorUnit       Int
+  currency              String          @db.VarChar(10)
+
+  signature              String?        @db.VarChar(512)
+
+  verificationReference String?         @db.VarChar(255)
+
+  metadata              Json?
+
+  createdAt             DateTime        @default(now())
+  capturedAt            DateTime?
+  refundedAt            DateTime?
+
+  user                  User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  purchase              Purchase        @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status])
+  @@index([purchaseId])
+  @@index([createdAt])
+}
+
+//
+// ============================================================
+// INVENTORY
+// ============================================================
+//
+
+model InventoryItem {
+  id          String            @id @default(uuid()) @db.Uuid
+
+  sku         String            @unique @db.VarChar(100)
+  name        String            @db.VarChar(150)
+  type        InventoryItemType
+
+  description String?           @db.VarChar(500)
+  metadata    Json?
+
+  isActive    Boolean           @default(true)
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  entries     InventoryEntry[]
+
+  @@index([type, isActive])
+}
+
+model InventoryEntry {
+  id          String   @id @default(uuid()) @db.Uuid
+
+  userId      String   @db.Uuid
+  itemId      String   @db.Uuid
+
+  quantity    Int      @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item        InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, itemId])
+  @@index([userId])
+}
+
+//
+// ============================================================
+// LIVE EVENTS
+// ============================================================
+//
+
+model GameEvent {
+  id          String      @id @default(uuid()) @db.Uuid
+
+  name        String      @db.VarChar(150)
+  description String?     @db.VarChar(1000)
+
+  status      EventStatus @default(DRAFT)
+
+  configuration Json?
+
+  startsAt    DateTime
+  endsAt      DateTime
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  participants EventParticipation[]
+
+  @@index([status, startsAt, endsAt])
+}
+
+model EventParticipation {
+  id          String   @id @default(uuid()) @db.Uuid
+
+  eventId     String   @db.Uuid
+  userId      String   @db.Uuid
+
+  score       Int      @default(0)
+  progress    Json?
+
+  joinedAt    DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event       GameEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId, score])
+  @@index([userId])
+}
+
+//
+// ============================================================
+// ACHIEVEMENTS
+// ============================================================
+//
+
+model Achievement {
+  id          String   @id @default(uuid()) @db.Uuid
+
+  code        String   @unique @db.VarChar(100)
+  name        String   @db.VarChar(150)
+  description String?  @db.VarChar(500)
+
+  configuration Json
+  isActive      Boolean @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  playerAchievements PlayerAchievement[]
+
+  @@index([isActive])
+}
+
+model PlayerAchievement {
+  id             String             @id @default(uuid()) @db.Uuid
+
+  userId         String             @db.Uuid
+  achievementId  String             @db.Uuid
+
+  status         AchievementStatus  @default(LOCKED)
+  progressValue  Int                @default(0)
+
+  completedAt    DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement    Achievement        @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId, status])
+}
+
+//
+// ============================================================
+// LEADERBOARDS
+// ============================================================
+//
+
+model Leaderboard {
+  id          String          @id @default(uuid()) @db.Uuid
+
+  name        String          @db.VarChar(150)
+  type        LeaderboardType
+
+  eventId     String?         @db.Uuid
+  levelId     String?         @db.Uuid
+
+  startsAt    DateTime?
+  endsAt      DateTime?
+
+  isActive    Boolean         @default(true)
+
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  entries     LeaderboardEntry[]
+
+  @@index([type, isActive])
+  @@index([eventId])
+  @@index([levelId])
+}
+
+model LeaderboardEntry {
+  id             String      @id @default(uuid()) @db.Uuid
+
+  leaderboardId  String      @db.Uuid
+  userId         String      @db.Uuid
+
+  score          Int
+  rank           Int?
+
+  updatedAt      DateTime    @updatedAt
+  createdAt      DateTime    @default(now())
+
+  leaderboard    Leaderboard  @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([leaderboardId, userId])
+  @@index([leaderboardId, score])
+  @@index([userId])
+}
+
+//
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+//
+
+model Notification {
+  id          String             @id @default(uuid()) @db.Uuid
+
+  userId      String             @db.Uuid
+
+  type        NotificationType
+  status      NotificationStatus @default(PENDING)
+
+  title       String             @db.VarChar(200)
+  message     String             @db.VarChar(1000)
+
+  data        Json?
+
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  readAt      DateTime?
+
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([scheduledAt])
+}
+
+//
+// ============================================================
+// IDEMPOTENCY
+// ============================================================
+//
+
+model IdempotencyKey {
+  id          String   @id @default(uuid()) @db.Uuid
+
+  userId      String?  @db.Uuid
+  key         String   @unique @db.VarChar(128)
+
+  operation   String   @db.VarChar(150)
+
+  responseCode Int?
+  responseBody Json?
+
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, operation])
+  @@index([expiresAt])
+}
+
+//
+// ============================================================
+// AUDIT / SECURITY
+// ============================================================
+//
+
+model AuditLog {
+  id          String      @id @default(uuid()) @db.Uuid
+
+  userId      String?     @db.Uuid
+
+  action      AuditAction
+  entityType  String      @db.VarChar(100)
+  entityId    String?     @db.VarChar(128)
+
+  requestId   String?     @db.VarChar(128)
+  ipHash      String?     @db.VarChar(128)
+  userAgent   String?     @db.VarChar(500)
+
+  metadata    Json?
+
+  createdAt   DateTime    @default(now())
+
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@index([requestId])
+}
