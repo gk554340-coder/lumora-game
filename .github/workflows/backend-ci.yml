@@ -73,7 +73,7 @@ jobs:
       - name: Build backend
         run: npm run build
 
-              - name: Run integration tests
+       - name: Run integration tests
         run: npm test
         env:
           NODE_ENV: test
