@@ -1,5 +1,6 @@
+
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../generated/prisma/client";
+import { PrismaClient } from "../generated/prisma/client.js";
 import { env } from "./env.js";
 import { databaseConfig } from "./database.js";
 
