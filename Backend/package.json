@@ -11,6 +11,7 @@
   "build": "prisma generate && tsc",
   "start": "node dist/index.js",
   "typecheck": "prisma generate && tsc --noEmit",
+    "test": "prisma generate && node --import tsx --test \"tests/**/*.test.ts\"",
   "prisma:generate": "prisma generate"
 },
   "engines": {
