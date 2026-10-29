@@ -209,7 +209,7 @@ export const env = Object.freeze({
   port: getPort(),
   appName: getOptionalString("APP_NAME") ?? "LUMORA Backend",
   appVersion: getOptionalString("APP_VERSION") ?? "0.1.0",
-  databaseUrl: getOptionalString("DATABASE_URL"),
+  databaseUrl: getRequiredString("DATABASE_URL"),
   jwtSecret: getOptionalString("JWT_SECRET"),
   corsOrigin: getCorsOrigin(),
   logLevel: getLogLevel(),
