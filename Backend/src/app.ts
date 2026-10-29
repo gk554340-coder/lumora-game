@@ -12,6 +12,10 @@ export function buildApp(): FastifyInstance {
     logger: {
       level: env.logLevel,
     },
+    // Enable only behind a trusted reverse proxy or load balancer.
+    // Otherwise every client appears to share the proxy IP address and
+    // rate limiting would apply to all users at once.
+    trustProxy: env.trustProxy,
   });
 
   app.register(helmet);
