@@ -118,6 +118,7 @@ enum PaymentStatus {
 
 enum PaymentProvider {
   RAZORPAY
+  GOOGLE_PLAY
 }
 
 enum EventStatus {
