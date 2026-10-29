@@ -1,3 +1,4 @@
+
 generator client {
   provider            = "prisma-client"
   output              = "../src/generated/prisma"
@@ -177,41 +178,41 @@ enum AuditAction {
 //
 
 model User {
-  id            String     @id @default(uuid()) @db.Uuid
-  email         String?    @unique @db.VarChar(320)
-  username      String?    @unique @db.VarChar(32)
-  status        UserStatus @default(ACTIVE)
+  id                 String     @id @default(uuid()) @db.Uuid
+  email              String?    @unique @db.VarChar(320)
+  username           String?    @unique @db.VarChar(32)
+  status             UserStatus @default(ACTIVE)
 
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  lastLoginAt   DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  lastLoginAt        DateTime?
 
-  profile       PlayerProfile?
-  devices       Device[]
-  sessions      Session[]
+  profile            PlayerProfile?
+  devices            Device[]
+  sessions           Session[]
 
-  wallet        Wallet?
+  wallet             Wallet?
 
-  progress      PlayerProgress[]
-  attempts      LevelAttempt[]
+  progress           PlayerProgress[]
+  attempts           LevelAttempt[]
 
-  rewardGrants  RewardGrant[]
-  purchases     Purchase[]
-  payments      Payment[]
+  rewardGrants       RewardGrant[]
+  purchases          Purchase[]
+  payments           Payment[]
 
-  inventory     InventoryEntry[]
+  inventory          InventoryEntry[]
 
-  eventEntries  EventParticipation[]
+  eventEntries       EventParticipation[]
 
-  achievements  PlayerAchievement[]
+  achievements       PlayerAchievement[]
 
   leaderboardEntries LeaderboardEntry[]
 
-  notifications Notification[]
+  notifications      Notification[]
 
-  auditLogs     AuditLog[]
+  auditLogs          AuditLog[]
 
-  idempotencyKeys IdempotencyKey[]
+  idempotencyKeys    IdempotencyKey[]
 
   @@index([status])
   @@index([createdAt])
@@ -296,6 +297,7 @@ model GameLevel {
 
   progress        PlayerProgress[]
   attempts        LevelAttempt[]
+  leaderboards    Leaderboard[]
 
   @@index([status, levelNumber])
   @@index([difficultyTier])
@@ -382,7 +384,7 @@ model RewardGrant {
   id                String       @id @default(uuid()) @db.Uuid
 
   userId            String       @db.Uuid
-  rewardDefinitionId String      @db.Uuid
+  rewardDefinitionId String       @db.Uuid
 
   status            RewardStatus @default(PENDING)
 
@@ -413,19 +415,19 @@ model RewardGrant {
 //
 
 model Wallet {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @unique @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @db.Uuid
 
-  tokenBalance Int     @default(0)
-  coinBalance  Int     @default(0)
-  gemBalance   Int     @default(0)
+  tokenBalance Int      @default(0)
+  coinBalance  Int      @default(0)
+  gemBalance   Int      @default(0)
 
-  version     Int      @default(0)
+  version      Int      @default(0)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   transactions WalletTransaction[]
 }
@@ -454,7 +456,7 @@ model WalletTransaction {
 
   wallet         Wallet                   @relation(fields: [walletId], references: [id], onDelete: Restrict)
   rewardGrant    RewardGrant?             @relation(fields: [rewardGrantId], references: [id], onDelete: Restrict)
-  purchase       Purchase?               @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  purchase       Purchase?                @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
 
   @@index([userId, currency, createdAt])
   @@index([walletId, createdAt])
@@ -493,26 +495,26 @@ model PurchaseProduct {
 }
 
 model Purchase {
-  id             String         @id @default(uuid()) @db.Uuid
+  id              String         @id @default(uuid()) @db.Uuid
 
-  userId         String         @db.Uuid
-  productId      String         @db.Uuid
+  userId          String         @db.Uuid
+  productId       String         @db.Uuid
 
-  status         PurchaseStatus @default(PENDING)
+  status          PurchaseStatus @default(PENDING)
 
   amountMinorUnit Int
-  currency       String         @db.VarChar(10)
+  currency        String         @db.VarChar(10)
 
-  idempotencyKey String         @unique @db.VarChar(128)
+  idempotencyKey  String         @unique @db.VarChar(128)
 
-  createdAt      DateTime       @default(now())
-  completedAt    DateTime?
-  refundedAt     DateTime?
+  createdAt       DateTime       @default(now())
+  completedAt     DateTime?
+  refundedAt      DateTime?
 
-  user           User           @relation(fields: [userId], references: [id], onDelete: Restrict)
-  product        PurchaseProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  user            User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  product         PurchaseProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
 
-  payments       Payment[]
+  payments        Payment[]
   walletTransactions WalletTransaction[]
 
   @@index([userId, status])
@@ -535,7 +537,7 @@ model Payment {
   amountMinorUnit       Int
   currency              String          @db.VarChar(10)
 
-  signature              String?        @db.VarChar(512)
+  signature             String?         @db.VarChar(512)
 
   verificationReference String?         @db.VarChar(255)
 
@@ -604,22 +606,23 @@ model InventoryEntry {
 //
 
 model GameEvent {
-  id          String      @id @default(uuid()) @db.Uuid
+  id            String      @id @default(uuid()) @db.Uuid
 
-  name        String      @db.VarChar(150)
-  description String?     @db.VarChar(1000)
+  name          String      @db.VarChar(150)
+  description   String?     @db.VarChar(1000)
 
-  status      EventStatus @default(DRAFT)
+  status        EventStatus @default(DRAFT)
 
   configuration Json?
 
-  startsAt    DateTime
-  endsAt      DateTime
+  startsAt      DateTime
+  endsAt        DateTime
 
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
-  participants EventParticipation[]
+  participants  EventParticipation[]
+  leaderboards  Leaderboard[]
 
   @@index([status, startsAt, endsAt])
 }
@@ -711,6 +714,9 @@ model Leaderboard {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
+  event       GameEvent?      @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  level       GameLevel?      @relation(fields: [levelId], references: [id], onDelete: SetNull)
+
   entries     LeaderboardEntry[]
 
   @@index([type, isActive])
@@ -777,20 +783,20 @@ model Notification {
 //
 
 model IdempotencyKey {
-  id          String   @id @default(uuid()) @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
 
-  userId      String?  @db.Uuid
-  key         String   @unique @db.VarChar(128)
+  userId       String?  @db.Uuid
+  key          String   @unique @db.VarChar(128)
 
-  operation   String   @db.VarChar(150)
+  operation    String   @db.VarChar(150)
 
   responseCode Int?
   responseBody Json?
 
-  createdAt   DateTime @default(now())
-  expiresAt   DateTime
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
 
-  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, operation])
   @@index([expiresAt])
