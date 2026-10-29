@@ -1,12 +1,8 @@
-import type {
-  FastifyPluginAsync,
-  FastifyRequest,
-} from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 
-import { AppError } from "../errors/AppError.js";
 import { env } from "../config/env.js";
-import { sessionConfig } from "../config/session.js";
-import { validateSession, revokeSession } from "../services/session.service.js";
+import { authenticateRequest } from "../plugins/authenticate.js";
+import { revokeSession } from "../services/session.service.js";
 import {
   getCurrentUser,
   loginUser,
@@ -34,44 +30,6 @@ const authRateLimit = {
 };
 
 const authRoutes: FastifyPluginAsync = async (app) => {
-  const authenticate = async (request: FastifyRequest) => {
-    const header = request.headers.authorization;
-
-    if (!header?.startsWith("Bearer ")) {
-      throw new AppError(
-        "UNAUTHORIZED",
-        "Authentication is required.",
-        401,
-      );
-    }
-
-    const token = header.slice(7);
-
-    try {
-      return await validateSession(token, sessionConfig).then(
-        (session) => {
-          if (!session) {
-            throw new AppError(
-              "INVALID_SESSION",
-              "Session is invalid or expired.",
-              401,
-            );
-          }
-
-          return session;
-        },
-      );
-    } catch (error) {
-      if (error instanceof AppError) throw error;
-
-      throw new AppError(
-        "INVALID_SESSION",
-        "Session is invalid or expired.",
-        401,
-      );
-    }
-  };
-
   app.post<{
     Body: { email: string; password: string; username?: string };
   }>(
@@ -139,7 +97,7 @@ const authRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get("/auth/me", async (request) => {
-    const session = await authenticate(request);
+    const session = await authenticateRequest(request);
 
     return {
       success: true,
@@ -148,7 +106,7 @@ const authRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/auth/logout", async (request) => {
-    const session = await authenticate(request);
+    const session = await authenticateRequest(request);
     await revokeSession(session.sessionId);
 
     return {
