@@ -1,4 +1,3 @@
-
 import {
   randomBytes,
   scrypt,
@@ -84,6 +83,18 @@ async function verifyPassword(
   return timingSafeEqual(actual, expected);
 }
 
+let dummyHashPromise: Promise<string> | undefined;
+
+/**
+ * A valid hash of a random value, created once on first use. Login
+ * verifies against it when the account does not exist, so that every
+ * login attempt costs one scrypt run regardless of the email.
+ */
+function getDummyHash(): Promise<string> {
+  dummyHashPromise ??= hashPassword(randomBytes(16).toString("hex"));
+  return dummyHashPromise;
+}
+
 function isUniqueConstraintError(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -106,11 +117,15 @@ export async function registerUser(input: {
   let user;
 
   try {
+    // Nested creates run in the same transaction as the user row, so a
+    // user can never exist without its profile and wallet.
     user = await prisma.user.create({
       data: {
         email,
         username,
         passwordHash,
+        profile: { create: {} },
+        wallet: { create: {} },
       },
       select: {
         id: true,
@@ -156,11 +171,15 @@ export async function loginUser(input: {
     },
   });
 
-  if (
-    !user ||
-    !user.passwordHash ||
-    !(await verifyPassword(input.password, user.passwordHash))
-  ) {
+  // Always run one password verification, even when the account does
+  // not exist, so response time does not reveal registered emails.
+  const storedHash = user?.passwordHash ?? (await getDummyHash());
+  const passwordMatches = await verifyPassword(
+    input.password,
+    storedHash,
+  );
+
+  if (!user || !user.passwordHash || !passwordMatches) {
     throw new AppError(
       "INVALID_CREDENTIALS",
       "Email or password is incorrect.",
