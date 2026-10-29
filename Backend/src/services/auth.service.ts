@@ -1,27 +1,50 @@
+
 import {
   randomBytes,
   scrypt,
   timingSafeEqual,
 } from "node:crypto";
 
-import { promisify } from "node:util";
 import { UserStatus } from "../generated/prisma/client.js";
 import { prisma } from "../config/prisma.js";
 import { sessionConfig } from "../config/session.js";
 import { AppError } from "../errors/AppError.js";
 import { createSession } from "./session.service.js";
 
-const scryptAsync = promisify(scrypt);
 const KEY_LENGTH = 64;
+const SALT_LENGTH = 16;
+const SCRYPT_OPTIONS = {
+  N: 32768,
+  r: 8,
+  p: 1,
+  maxmem: 64 * 1024 * 1024,
+};
+
+function deriveKey(
+  password: string,
+  salt: Buffer,
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(
+      password,
+      salt,
+      KEY_LENGTH,
+      SCRYPT_OPTIONS,
+      (error, derivedKey) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve(derivedKey);
+      },
+    );
+  });
+}
 
 async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16);
-  const key = (await scryptAsync(password, salt, KEY_LENGTH, {
-    N: 32768,
-    r: 8,
-    p: 1,
-    maxmem: 64 * 1024 * 1024,
-  })) as Buffer;
+  const salt = randomBytes(SALT_LENGTH);
+  const key = await deriveKey(password, salt);
 
   return `scrypt$${salt.toString("hex")}$${key.toString("hex")}`;
 }
@@ -36,24 +59,27 @@ async function verifyPassword(
     return false;
   }
 
-  const salt = Buffer.from(parts[1], "hex");
-  const expected = Buffer.from(parts[2], "hex");
+  const saltHex = parts[1];
+  const keyHex = parts[2];
 
   if (
-    salt.length !== 16 ||
-    expected.length !== KEY_LENGTH ||
-    parts[1].length !== 32 ||
-    parts[2].length !== KEY_LENGTH * 2
+    !/^[0-9a-f]{32}$/i.test(saltHex) ||
+    !/^[0-9a-f]{128}$/i.test(keyHex)
   ) {
     return false;
   }
 
-  const actual = (await scryptAsync(password, salt, KEY_LENGTH, {
-    N: 32768,
-    r: 8,
-    p: 1,
-    maxmem: 64 * 1024 * 1024,
-  })) as Buffer;
+  const salt = Buffer.from(saltHex, "hex");
+  const expected = Buffer.from(keyHex, "hex");
+
+  if (
+    salt.length !== SALT_LENGTH ||
+    expected.length !== KEY_LENGTH
+  ) {
+    return false;
+  }
+
+  const actual = await deriveKey(password, salt);
 
   return timingSafeEqual(actual, expected);
 }
@@ -73,12 +99,14 @@ export async function registerUser(input: {
   username?: string;
 }) {
   const email = input.email.trim().toLowerCase();
-  const username = input.username?.trim();
+  const username = input.username?.trim() || undefined;
 
   const passwordHash = await hashPassword(input.password);
 
+  let user;
+
   try {
-    const user = await prisma.user.create({
+    user = await prisma.user.create({
       data: {
         email,
         username,
@@ -90,14 +118,6 @@ export async function registerUser(input: {
         username: true,
       },
     });
-
-    const session = await createSession(user.id, sessionConfig);
-
-    return {
-      user,
-      token: session.token,
-      expiresAt: session.expiresAt,
-    };
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       throw new AppError(
@@ -109,6 +129,14 @@ export async function registerUser(input: {
 
     throw error;
   }
+
+  const session = await createSession(user.id, sessionConfig);
+
+  return {
+    user,
+    token: session.token,
+    expiresAt: session.expiresAt,
+  };
 }
 
 export async function loginUser(input: {
