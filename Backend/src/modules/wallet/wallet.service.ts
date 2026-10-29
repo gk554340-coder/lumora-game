@@ -411,3 +411,62 @@ export async function listWalletTransactions(
     nextCursor: hasMore && last ? last.id : null,
   };
 }
+
+export interface WalletReconciliation {
+  consistent: boolean;
+  token: { balance: number; ledgerTotal: number };
+  gem: { balance: number; ledgerTotal: number };
+}
+
+/**
+ * Audit check: compares each stored balance with the net total of its
+ * ledger rows (credits minus debits). They must always match. A
+ * mismatch means data was changed outside this service and must be
+ * investigated. Server-side only; never expose this over HTTP.
+ */
+export async function reconcileWallet(
+  userId: string,
+): Promise<WalletReconciliation> {
+  if (!UUID_PATTERN.test(userId)) {
+    throw new AppError("INVALID_USER", "A valid user is required.", 400);
+  }
+
+  const [balances, rows] = await Promise.all([
+    getWalletBalances(userId),
+    prisma.$queryRaw<{ currency: string; net: unknown }[]>`
+      SELECT "currency"::text AS "currency",
+             COALESCE(
+               SUM(
+                 CASE WHEN "type" = 'CREDIT' THEN "amount" ELSE -"amount" END
+               ),
+               0
+             ) AS "net"
+      FROM "WalletTransaction"
+      WHERE "userId" = ${userId}::uuid
+      GROUP BY "currency"
+    `,
+  ]);
+
+  const ledgerTotal = (currency: SupportedCurrency): number => {
+    const row = rows.find((entry) => entry.currency === currency);
+    return row ? Number(row.net) : 0;
+  };
+
+  const token = {
+    balance: balances.tokenBalance,
+    ledgerTotal: ledgerTotal("TOKEN"),
+  };
+
+  const gem = {
+    balance: balances.gemBalance,
+    ledgerTotal: ledgerTotal("GEM"),
+  };
+
+  return {
+    consistent:
+      token.balance === token.ledgerTotal &&
+      gem.balance === gem.ledgerTotal,
+    token,
+    gem,
+  };
+}
