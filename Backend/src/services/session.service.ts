@@ -97,7 +97,7 @@ function validateConfiguration(
 function validateToken(
   token: string,
   config: SessionServiceConfig,
-): string {
+): string | null {
   if (
     typeof token !== "string" ||
     token.length === 0 ||
@@ -105,7 +105,7 @@ function validateToken(
     token.trim() !== token ||
     !/^[A-Za-z0-9_-]+$/.test(token)
   ) {
-    throw new Error("Invalid session token.");
+    return null;
   }
 
   return token;
@@ -161,7 +161,11 @@ export async function validateSession(
 ): Promise<ValidatedSession | null> {
   validateConfiguration(config);
 
-  const normalizedToken = validateToken(token, config);
+    const normalizedToken = validateToken(token, config);
+
+  if (normalizedToken === null) {
+    return null;
+  }
   const tokenHash = hashSessionToken(normalizedToken);
   const now = new Date();
 
