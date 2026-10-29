@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { SessionStatus } from "../generated/prisma/client";
+import { SessionStatus } from "../generated/prisma/client.js";
 import { prisma } from "../config/prisma.js";
 
 export interface SessionServiceConfig {
