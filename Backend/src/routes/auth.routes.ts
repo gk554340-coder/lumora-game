@@ -4,6 +4,7 @@ import type {
 } from "fastify";
 
 import { AppError } from "../errors/AppError.js";
+import { env } from "../config/env.js";
 import { sessionConfig } from "../config/session.js";
 import { validateSession, revokeSession } from "../services/session.service.js";
 import {
@@ -23,6 +24,13 @@ const passwordSchema = {
   type: "string",
   minLength: 12,
   maxLength: 128,
+};
+
+// Stricter limit for credential endpoints. Password hashing is CPU
+// heavy, so these routes must not share the generous global limit.
+const authRateLimit = {
+  max: env.authRateLimitMax,
+  timeWindow: env.authRateLimitTimeWindow,
 };
 
 const authRoutes: FastifyPluginAsync = async (app) => {
@@ -69,6 +77,9 @@ const authRoutes: FastifyPluginAsync = async (app) => {
   }>(
     "/auth/register",
     {
+      config: {
+        rateLimit: authRateLimit,
+      },
       schema: {
         body: {
           type: "object",
@@ -102,6 +113,9 @@ const authRoutes: FastifyPluginAsync = async (app) => {
   }>(
     "/auth/login",
     {
+      config: {
+        rateLimit: authRateLimit,
+      },
       schema: {
         body: {
           type: "object",
