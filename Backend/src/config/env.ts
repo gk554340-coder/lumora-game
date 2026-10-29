@@ -263,7 +263,6 @@ export const env = Object.freeze({
   appName: getOptionalString("APP_NAME") ?? "LUMORA Backend",
   appVersion: getOptionalString("APP_VERSION") ?? "0.1.0",
   databaseUrl: getRequiredString("DATABASE_URL"),
-  jwtSecret: getOptionalString("JWT_SECRET"),
   corsOrigin: getCorsOrigin(),
   logLevel: getLogLevel(),
   trustProxy: getBoolean("TRUST_PROXY", false),
@@ -283,5 +282,4 @@ export function requireProductionSecrets(): void {
   }
 
   getRequiredString("DATABASE_URL");
-  getRequiredString("JWT_SECRET");
 }
