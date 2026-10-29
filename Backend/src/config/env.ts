@@ -120,7 +120,12 @@ function getLogLevel(): LogLevel {
   return value as LogLevel;
 }
 
-function getCorsOrigin(): string | undefined {
+/**
+ * Parses CORS_ORIGIN as a comma separated list and returns an array.
+ * @fastify/cors treats a single string as one origin, so the list must
+ * be returned as an array for multiple origins to work.
+ */
+function getCorsOrigin(): string[] | undefined {
   const value = getOptionalString("CORS_ORIGIN");
 
   if (value === undefined) {
@@ -153,7 +158,7 @@ function getCorsOrigin(): string | undefined {
     }
   }
 
-  return origins.join(",");
+  return origins;
 }
 
 const nodeEnv = getEnvironment();
