@@ -19,6 +19,9 @@ const MAX_SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS = 31_536_000;
 const MAX_RATE_LIMIT_MAX = 100_000;
 const MAX_RATE_LIMIT_TIME_WINDOW_MS = 86_400_000;
 
+const DEFAULT_AUTH_RATE_LIMIT_MAX = 10;
+const DEFAULT_AUTH_RATE_LIMIT_TIME_WINDOW_MS = 60_000;
+
 const VALID_LOG_LEVELS: readonly LogLevel[] = [
   "fatal",
   "error",
@@ -106,6 +109,37 @@ function getInteger(
   }
 
   return value;
+}
+
+function getOptionalInteger(
+  name: string,
+  defaultValue: number,
+  minimum: number,
+  maximum: number,
+): number {
+  if (getOptionalString(name) === undefined) {
+    return defaultValue;
+  }
+
+  return getInteger(name, minimum, maximum);
+}
+
+function getBoolean(name: string, defaultValue: boolean): boolean {
+  const value = getOptionalString(name)?.toLowerCase();
+
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  throw new Error(`Invalid ${name}. Expected "true" or "false".`);
 }
 
 function getLogLevel(): LogLevel {
@@ -199,6 +233,20 @@ const rateLimitTimeWindow = getInteger(
   MAX_RATE_LIMIT_TIME_WINDOW_MS,
 );
 
+const authRateLimitMax = getOptionalInteger(
+  "AUTH_RATE_LIMIT_MAX",
+  DEFAULT_AUTH_RATE_LIMIT_MAX,
+  1,
+  MAX_RATE_LIMIT_MAX,
+);
+
+const authRateLimitTimeWindow = getOptionalInteger(
+  "AUTH_RATE_LIMIT_TIME_WINDOW_MS",
+  DEFAULT_AUTH_RATE_LIMIT_TIME_WINDOW_MS,
+  1,
+  MAX_RATE_LIMIT_TIME_WINDOW_MS,
+);
+
 const minimumEncodedTokenLength = Math.ceil(
   (sessionTokenBytes * 8) / 6,
 );
@@ -218,12 +266,15 @@ export const env = Object.freeze({
   jwtSecret: getOptionalString("JWT_SECRET"),
   corsOrigin: getCorsOrigin(),
   logLevel: getLogLevel(),
+  trustProxy: getBoolean("TRUST_PROXY", false),
   sessionTokenBytes,
   sessionTtlSeconds,
   sessionMaxTokenLength,
   sessionLastUsedUpdateIntervalSeconds,
   rateLimitMax,
   rateLimitTimeWindow,
+  authRateLimitMax,
+  authRateLimitTimeWindow,
 });
 
 export function requireProductionSecrets(): void {
