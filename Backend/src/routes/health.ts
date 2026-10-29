@@ -8,7 +8,10 @@ const healthRoutes: FastifyPluginAsync = async (app) => {
       status: "ok",
       service: env.appName,
       version: env.appVersion,
-      environment: env.nodeEnv
+      // The environment name is internal detail; do not expose it publicly.
+      ...(env.nodeEnv === "production"
+        ? {}
+        : { environment: env.nodeEnv }),
     };
   });
 };
