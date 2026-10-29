@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { SessionStatus } from "../generated/prisma/client.js";
+import { SessionStatus, UserStatus } from "../generated/prisma/client.js";
 import { prisma } from "../config/prisma.js";
 
 export interface SessionServiceConfig {
@@ -150,6 +150,11 @@ export async function createSession(
   };
 }
 
+/**
+ * Returns the session only when the session is ACTIVE, not expired, and
+ * its owning user is ACTIVE. A suspended or deleted user loses access on
+ * the very next request, even if the session row itself is still valid.
+ */
 export async function validateSession(
   token: string,
   config: SessionServiceConfig,
@@ -170,10 +175,19 @@ export async function validateSession(
       status: true,
       expiresAt: true,
       lastUsedAt: true,
+      user: {
+        select: {
+          status: true,
+        },
+      },
     },
   });
 
-  if (!session || session.status !== SessionStatus.ACTIVE) {
+  if (
+    !session ||
+    session.status !== SessionStatus.ACTIVE ||
+    session.user.status !== UserStatus.ACTIVE
+  ) {
     return null;
   }
 
