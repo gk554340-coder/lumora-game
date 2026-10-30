@@ -1,4 +1,3 @@
-
 generator client {
   provider            = "prisma-client"
   output              = "../src/generated/prisma"
@@ -229,6 +228,9 @@ model PlayerProfile {
   experience  Int      @default(0)
   level       Int      @default(1)
 
+  dailyStreak      Int       @default(0)
+  lastDailyClaimOn DateTime? @db.Date
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -366,6 +368,7 @@ model LevelAttempt {
 model RewardDefinition {
   id             String     @id @default(uuid()) @db.Uuid
 
+  code           String     @unique @db.VarChar(100)
   name           String     @db.VarChar(100)
   description    String?    @db.VarChar(500)
 
@@ -405,6 +408,7 @@ model RewardGrant {
 
   walletTransactions WalletTransaction[]
 
+  @@unique([userId, rewardDefinitionId, sourceId])
   @@index([userId, status])
   @@index([rewardDefinitionId])
   @@index([expiresAt])
