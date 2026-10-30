@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 
 import { authenticateRequest } from "../../plugins/authenticate.js";
+import { checkAchievementsSafely } from "../achievements/achievement.service.js";
 import {
   MAX_LEVEL_NUMBER,
   getLevelProgress,
@@ -78,13 +79,23 @@ const levelRoutes: FastifyPluginAsync = async (app) => {
     async (request) => {
       const session = await authenticateRequest(request);
 
+      const result = await submitAttempt(
+        session.userId,
+        request.params.attemptId,
+        request.body.moves,
+      );
+
+      // The level is already saved. A problem while checking
+      // achievements must not fail the submission.
+      const achievements = await checkAchievementsSafely(
+        session.userId,
+        (error) =>
+          request.log.error({ err: error }, "Achievement check failed"),
+      );
+
       return {
         success: true,
-        data: await submitAttempt(
-          session.userId,
-          request.params.attemptId,
-          request.body.moves,
-        ),
+        data: { ...result, achievements },
       };
     },
   );
