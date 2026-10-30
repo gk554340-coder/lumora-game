@@ -11,7 +11,15 @@
  *  - { cycle: [{ currencies }] } a reward that depends on the cycle day,
  *                                used by the daily reward streak and by
  *                                the level star reward (cycle day = star)
+ *
+ * Achievement rewards are added from the achievement catalog, one
+ * definition per achievement, named "achievement.<code>".
  */
+
+import {
+  ACHIEVEMENTS,
+  achievementRewardCode,
+} from "../achievements/achievement.catalog.js";
 
 export type RewardCurrency = "TOKEN" | "GEM";
 
@@ -91,4 +99,12 @@ export const REWARD_DEFAULTS: readonly RewardDefault[] = [
       currencies: [{ currency: "GEM", amount: 5 }],
     },
   },
+  ...ACHIEVEMENTS.map(
+    (entry): RewardDefault => ({
+      code: achievementRewardCode(entry.code),
+      name: `Achievement: ${entry.name}`,
+      description: entry.description,
+      configuration: { currencies: entry.reward },
+    }),
+  ),
 ];
