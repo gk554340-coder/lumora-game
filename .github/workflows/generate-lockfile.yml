@@ -1,0 +1,49 @@
+name: Generate package-lock
+
+# Manual workflow. Run it once from the Actions tab to create or refresh
+# Backend/package-lock.json. The file is committed to main and also
+# attached to the run as a downloadable artifact.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    name: Generate lockfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Create the lockfile
+        working-directory: Backend
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Upload the lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: Backend/package-lock.json
+
+      - name: Commit the lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Backend/package-lock.json
+          if git diff --cached --quiet; then
+            echo "The lockfile is already up to date."
+            exit 0
+          fi
+          git commit -m "chore(backend): add package-lock.json"
+          git push
