@@ -4,8 +4,9 @@ import type { GooglePlayConfig } from "../../config/google-play.js";
 
 /**
  * Minimal Google Play Developer API client (androidpublisher v3).
- * Only what the server needs: read a one-time product purchase and
- * consume it. Purchase tokens and access tokens are never logged.
+ * Only what the server needs: read a one-time product purchase,
+ * consume it, and list voided purchases. Purchase tokens and access
+ * tokens are never logged.
  */
 
 export interface PlayProductPurchase {
@@ -28,6 +29,28 @@ export interface PlayBillingClient {
     purchaseToken: string,
   ): Promise<PlayProductPurchase | null>;
   consume(sku: string, purchaseToken: string): Promise<void>;
+}
+
+export interface VoidedPurchaseRecord {
+  purchaseToken: string;
+  orderId: string | null;
+  voidedTimeMillis: number | null;
+  /** 0 user, 1 developer, 2 Google. */
+  voidedSource: number | null;
+  voidedReason: number | null;
+}
+
+export interface VoidedPurchasePage {
+  items: VoidedPurchaseRecord[];
+  nextPageToken: string | null;
+}
+
+/** Lists purchases that were refunded, canceled or charged back. */
+export interface PlayVoidedPurchaseSource {
+  listVoidedPurchases(options: {
+    startTimeMillis: number;
+    pageToken?: string;
+  }): Promise<VoidedPurchasePage>;
 }
 
 export class PlayApiError extends Error {
@@ -60,7 +83,9 @@ function base64Url(input: Buffer | string): string {
   return Buffer.from(input).toString("base64url");
 }
 
-export class GooglePlayClient implements PlayBillingClient {
+export class GooglePlayClient
+  implements PlayBillingClient, PlayVoidedPurchaseSource
+{
   private readonly config: GooglePlayConfig;
   private readonly fetchImpl: FetchLike;
   private readonly now: () => number;
@@ -264,5 +289,84 @@ export class GooglePlayClient implements PlayBillingClient {
         response.status,
       );
     }
+  }
+
+  async listVoidedPurchases(options: {
+    startTimeMillis: number;
+    pageToken?: string;
+  }): Promise<VoidedPurchasePage> {
+    const query = new URLSearchParams({
+      type: "0",
+      maxResults: "100",
+      startTime: String(options.startTimeMillis),
+    });
+
+    if (options.pageToken) {
+      query.set("token", options.pageToken);
+    }
+
+    const response = await this.call(
+      `${API_BASE}/${encodeURIComponent(this.config.packageName)}` +
+        `/purchases/voidedpurchases?${query.toString()}`,
+      "GET",
+    );
+
+    if (!response.ok) {
+      throw new PlayApiError(
+        "The Google Play API returned an error.",
+        response.status,
+      );
+    }
+
+    const body = (await response.json().catch(() => null)) as {
+      voidedPurchases?: unknown;
+      tokenPagination?: { nextPageToken?: unknown };
+    } | null;
+
+    if (!body || typeof body !== "object") {
+      throw new PlayApiError("Google Play returned an unexpected reply.");
+    }
+
+    // Google sends milliseconds as strings.
+    const millis = (value: unknown): number | null => {
+      const parsed =
+        typeof value === "string" ? Number(value) : value;
+      return typeof parsed === "number" && Number.isFinite(parsed)
+        ? parsed
+        : null;
+    };
+
+    const items: VoidedPurchaseRecord[] = [];
+
+    if (Array.isArray(body.voidedPurchases)) {
+      for (const raw of body.voidedPurchases as Array<
+        Record<string, unknown>
+      >) {
+        if (
+          raw &&
+          typeof raw.purchaseToken === "string" &&
+          raw.purchaseToken
+        ) {
+          items.push({
+            purchaseToken: raw.purchaseToken,
+            orderId:
+              typeof raw.orderId === "string" && raw.orderId
+                ? raw.orderId
+                : null,
+            voidedTimeMillis: millis(raw.voidedTimeMillis),
+            voidedSource: millis(raw.voidedSource),
+            voidedReason: millis(raw.voidedReason),
+          });
+        }
+      }
+    }
+
+    const next = body.tokenPagination?.nextPageToken;
+
+    return {
+      items,
+      nextPageToken:
+        typeof next === "string" && next ? next : null,
+    };
   }
 }
