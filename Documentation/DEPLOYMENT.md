@@ -26,17 +26,27 @@ The database password in `docker-compose.yml` is for local use only.
 ## Environment variables
 
 Set these on the `runtime` container. See `Backend/.env.example` for
-the full list with defaults.
+the full list.
 
-| Variable          | Required | Notes                                                        |
-| ----------------- | -------- | ------------------------------------------------------------ |
-| `NODE_ENV`        | yes      | `production`. Already set in the image.                      |
-| `DATABASE_URL`    | yes      | PostgreSQL connection string. Keep it in a secret store.     |
-| `PORT`            | no       | Default `3000`.                                              |
-| `CORS_ORIGIN`     | no       | Exact origins, comma separated, no trailing slash.           |
-| `TRUST_PROXY`     | no       | Set `true` only behind a trusted proxy or load balancer.     |
-| `LOG_LEVEL`       | no       | Default `info`.                                              |
-| `RATE_LIMIT_MAX`  | no       | Requests per window per client. Default `100`.               |
+Only `DATABASE_URL` must always be provided. The image ships safe
+defaults for the others, listed below, and each can be overridden.
+
+| Variable                                    | Default in the image | Notes                                                    |
+| ------------------------------------------- | -------------------- | -------------------------------------------------------- |
+| `DATABASE_URL`                              | none, required       | PostgreSQL connection string. Keep it in a secret store. |
+| `NODE_ENV`                                  | `production`         |                                                          |
+| `SESSION_TOKEN_BYTES`                       | `32`                 | Random bytes in a session token.                         |
+| `SESSION_TTL_SECONDS`                       | `604800` (7 days)    | How long a session lasts.                                |
+| `SESSION_MAX_TOKEN_LENGTH`                  | `1024`               | Longest token the server will read.                      |
+| `SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS` | `300`                | How often "last used" is saved.                          |
+| `RATE_LIMIT_MAX`                            | `100`                | Requests per window per client.                          |
+| `RATE_LIMIT_TIME_WINDOW_MS`                 | `60000`              | Length of the rate limit window.                         |
+| `AUTH_RATE_LIMIT_MAX`                       | `10`                 | Register and login attempts per window.                  |
+| `AUTH_RATE_LIMIT_TIME_WINDOW_MS`            | `60000`              | Window for the stricter auth limit.                      |
+| `PORT`                                      | `3000`               |                                                          |
+| `CORS_ORIGIN`                               | none                 | Exact origins, comma separated, no trailing slash.       |
+| `TRUST_PROXY`                               | `false`              | Set `true` only behind a trusted proxy or load balancer. |
+| `LOG_LEVEL`                                 | `info`               |                                                          |
 
 Never put secrets in the image or in the repository.
 
