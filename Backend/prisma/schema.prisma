@@ -594,6 +594,7 @@ model InventoryEntry {
   itemId      String   @db.Uuid
 
   quantity    Int      @default(0)
+  equipped    Boolean  @default(false)
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
