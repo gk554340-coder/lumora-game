@@ -20,7 +20,7 @@
   "dependencies": {
     "@fastify/cors": "^11.0.1",
     "@fastify/helmet": "^13.0.1",
-    "@fastify/rate-limit": "^10.2.2",
+    "@fastify/rate-limit": "^11.2.1",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "dotenv": "^17.2.3",
