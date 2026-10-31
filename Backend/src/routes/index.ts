@@ -8,6 +8,7 @@ import levelRoutes from "../modules/levels/level.routes.js";
 import hintRoutes from "../modules/levels/hint.routes.js";
 import leaderboardRoutes from "../modules/leaderboards/leaderboard.routes.js";
 import achievementRoutes from "../modules/achievements/achievement.routes.js";
+import paymentRoutes from "../modules/payments/payment.routes.js";
 
 const routes: FastifyPluginAsync = async (app) => {
   await app.register(healthRoutes);
@@ -18,6 +19,7 @@ const routes: FastifyPluginAsync = async (app) => {
   await app.register(hintRoutes);
   await app.register(leaderboardRoutes);
   await app.register(achievementRoutes);
+  await app.register(paymentRoutes);
 };
 
 export default routes;
