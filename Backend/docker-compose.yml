@@ -1,0 +1,56 @@
+# Local run of the whole backend: database, migrations and API.
+#
+#   docker compose up --build
+#
+# The API is then at http://localhost:3000/api/health
+#
+# The database password below is for local use only. Never reuse it.
+
+name: lumora
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: lumora
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lumora_local_only}
+      POSTGRES_DB: lumora
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - lumora-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumora -d lumora"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://lumora:${POSTGRES_PASSWORD:-lumora_local_only}@db:5432/lumora?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      target: runtime
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      LOG_LEVEL: info
+      TRUST_PROXY: "false"
+      CORS_ORIGIN: http://localhost:3000
+      DATABASE_URL: postgresql://lumora:${POSTGRES_PASSWORD:-lumora_local_only}@db:5432/lumora?schema=public
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  lumora-db:
