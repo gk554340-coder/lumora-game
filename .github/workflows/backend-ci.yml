@@ -17,7 +17,7 @@ jobs:
   validate-backend:
     name: Validate Backend
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     defaults:
       run:
@@ -50,10 +50,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: Backend/package.json
+          cache-dependency-path: Backend/package-lock.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Generate Prisma Client
         run: npm run prisma:generate
@@ -86,3 +86,43 @@ jobs:
           RATE_LIMIT_TIME_WINDOW_MS: "60000"
           AUTH_RATE_LIMIT_MAX: "100000"
           AUTH_RATE_LIMIT_TIME_WINDOW_MS: "60000"
+
+      - name: Build the production image
+        run: docker build --tag lumora-backend:ci .
+
+      - name: Build the migration image and run it
+        run: |
+          docker build --target migrate --tag lumora-migrate:ci .
+          docker run --rm --network host \
+            --env DATABASE_URL="$DATABASE_URL" \
+            lumora-migrate:ci
+
+      - name: Start the production image and check it
+        run: |
+          docker run --detach --name lumora-backend --network host \
+            --env NODE_ENV=production \
+            --env PORT=3100 \
+            --env DATABASE_URL="$DATABASE_URL" \
+            lumora-backend:ci
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3100/api/health; then
+              echo
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "The production image did not become healthy."
+              docker logs lumora-backend
+              exit 1
+            fi
+            sleep 2
+          done
+
+          # A real request through the compiled app and the database.
+          curl --fail --silent --show-error \
+            --request POST http://127.0.0.1:3100/api/auth/register \
+            --header "content-type: application/json" \
+            --data "{\"email\":\"smoke-${GITHUB_RUN_ID}@example.test\",\"password\":\"correct-horse-battery-staple\"}" \
+            > /dev/null || { docker logs lumora-backend; exit 1; }
+
+          docker stop lumora-backend
