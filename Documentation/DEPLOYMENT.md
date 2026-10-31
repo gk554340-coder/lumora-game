@@ -50,6 +50,57 @@ defaults for the others, listed below, and each can be overridden.
 
 Never put secrets in the image or in the repository.
 
+## Google Play payments
+
+Payments are optional. Without the three settings below the server runs
+normally and the payment endpoints answer `503 PAYMENTS_NOT_CONFIGURED`.
+Set all three together. If only some are set, the server refuses to
+start, so a half-configured production never runs by accident.
+
+| Variable                           | Default            | Notes                                                                                                   |
+| ---------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `GOOGLE_PLAY_PACKAGE_NAME`         | none               | Package name of the Android app.                                                                        |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | none               | Service account key, as raw JSON or base64 of the JSON. Keep it in a secret store.                      |
+| `GOOGLE_PLAY_ACCOUNT_SECRET`       | none               | Random secret, at least 32 characters. Never change it after launch, or old purchases cannot be matched. |
+| `GOOGLE_PLAY_ALLOW_TEST_PURCHASES` | `true` outside production, `false` in production | Accept Google test purchases.                                      |
+
+Setting up Google Play, once:
+
+1. In Play Console, create the in-app products with the same ids as the
+   server catalog: `lumora_gems_60`, `lumora_gems_150`,
+   `lumora_gems_400`, `lumora_gems_1000`. The price players pay is the
+   one set in Play Console.
+2. In Google Cloud, create a service account and a JSON key. In Play
+   Console, give that account access to the app, with permission to view
+   financial data and manage orders.
+3. Set the three variables above on the `runtime` container.
+4. Make one test purchase with a licensed test account and check that
+   the gems arrive.
+
+How a purchase works: the app asks `GET /api/payments/google-play/account-id`
+and passes that id to Google when it starts the purchase. After paying,
+the app sends the purchase token to `POST /api/payments/google-play/verify`.
+The server checks it with Google, adds the gems once and then consumes
+the purchase so it can be bought again.
+
+### Refunds
+
+When Google refunds or charges back a purchase, the gems must be taken
+back. Run this once a day, using the same image and environment as the
+`runtime` container:
+
+```bash
+node dist/scripts/sync-voided-purchases.js
+```
+
+It prints one JSON line with the counts, and exits with code 1 if it
+fails. It is safe to run any number of times. It takes back only the
+gems still in the wallet. What the player already spent is not
+recovered, and the missing amount is saved on the payment record under
+`metadata.refund` so support can see it.
+
+Optional: `VOIDED_PURCHASES_LOOKBACK_DAYS` (1 to 30, default 28).
+
 ## Releasing a version
 
 1. Build both images from the same commit.
