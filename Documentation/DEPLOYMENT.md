@@ -132,3 +132,4 @@ the previous version of the server keeps working while they are applied.
 - `package-lock.json` is committed. CI and Docker both use `npm ci`, so
   every build installs exactly the same packages. To refresh the lock
   file, run the "Generate package-lock" workflow from the Actions tab.
+
