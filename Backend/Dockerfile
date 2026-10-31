@@ -37,6 +37,17 @@ RUN npm ci --omit=dev
 
 FROM base AS runtime
 ENV NODE_ENV=production
+
+# The server refuses to start without these settings. The values are the
+# same as in .env.example. Override any of them when the container runs.
+# DATABASE_URL has no default and must always be provided.
+ENV SESSION_TOKEN_BYTES=32 \
+    SESSION_TTL_SECONDS=604800 \
+    SESSION_MAX_TOKEN_LENGTH=1024 \
+    SESSION_LAST_USED_UPDATE_INTERVAL_SECONDS=300 \
+    RATE_LIMIT_MAX=100 \
+    RATE_LIMIT_TIME_WINDOW_MS=60000
+
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
