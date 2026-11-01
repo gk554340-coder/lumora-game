@@ -12,6 +12,7 @@ import paymentRoutes from "../modules/payments/payment.routes.js";
 import inventoryRoutes from "../modules/inventory/inventory.routes.js";
 import eventRoutes from "../modules/events/event.routes.js";
 import notificationRoutes from "../modules/notifications/notification.routes.js";
+import adminRoutes from "../modules/admin/admin.routes.js";
 
 const routes: FastifyPluginAsync = async (app) => {
   await app.register(healthRoutes);
@@ -26,6 +27,7 @@ const routes: FastifyPluginAsync = async (app) => {
   await app.register(inventoryRoutes);
   await app.register(eventRoutes);
   await app.register(notificationRoutes);
+  await app.register(adminRoutes);
 };
 
 export default routes;
