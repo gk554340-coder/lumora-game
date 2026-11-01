@@ -10,6 +10,7 @@ import leaderboardRoutes from "../modules/leaderboards/leaderboard.routes.js";
 import achievementRoutes from "../modules/achievements/achievement.routes.js";
 import paymentRoutes from "../modules/payments/payment.routes.js";
 import inventoryRoutes from "../modules/inventory/inventory.routes.js";
+import eventRoutes from "../modules/events/event.routes.js";
 
 const routes: FastifyPluginAsync = async (app) => {
   await app.register(healthRoutes);
@@ -22,6 +23,7 @@ const routes: FastifyPluginAsync = async (app) => {
   await app.register(achievementRoutes);
   await app.register(paymentRoutes);
   await app.register(inventoryRoutes);
+  await app.register(eventRoutes);
 };
 
 export default routes;
