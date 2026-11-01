@@ -303,6 +303,8 @@ describe("admin", () => {
       requestId: `req-${randomUUID()}`,
     };
 
+    // Fastify drops unknown fields instead of failing, so an extra field
+    // is not an invalid request and is not listed here.
     const cases: Array<Record<string, unknown>> = [
       { ...base, currency: "COIN" },
       { ...base, direction: "SIDEWAYS" },
@@ -312,7 +314,6 @@ describe("admin", () => {
       { ...base, amount: 1.5 },
       { ...base, reason: "  " },
       { ...base, requestId: "short" },
-      { ...base, extra: true },
     ];
 
     for (const payload of cases) {
