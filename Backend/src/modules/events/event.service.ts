@@ -1,5 +1,6 @@
 import { prisma } from "../../config/prisma.js";
 import { AppError } from "../../errors/AppError.js";
+import { createNotification } from "../notifications/notification.service.js";
 import { grantReward } from "../rewards/reward.service.js";
 import {
   EVENT_REWARD_DEFAULTS,
@@ -323,6 +324,26 @@ export async function finalizeEvent(
         rewarded += 1;
       } catch {
         failed += 1;
+        continue;
+      }
+
+      // The reward is already paid. A problem with the message must not
+      // count as a failed reward, and the dedupe key makes a rerun safe.
+      try {
+        await createNotification({
+          userId: row.userId,
+          type: "EVENT",
+          title: `${event.name} results`,
+          message: `You finished in place ${row.rank}. Your reward was added to your wallet.`,
+          data: {
+            eventId: event.id,
+            rank: row.rank,
+            score: row.total,
+          },
+          dedupeKey: `event-result:${event.id}`,
+        });
+      } catch {
+        // Ignored on purpose.
       }
     }
 
