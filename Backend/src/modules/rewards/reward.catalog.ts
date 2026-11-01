@@ -16,6 +16,7 @@
  * definition per achievement, named "achievement.<code>".
  */
 
+import { EVENT_REWARD_DEFAULTS } from "../events/event.catalog.js";
 import {
   ACHIEVEMENTS,
   achievementRewardCode,
@@ -99,6 +100,7 @@ export const REWARD_DEFAULTS: readonly RewardDefault[] = [
       currencies: [{ currency: "GEM", amount: 5 }],
     },
   },
+  ...EVENT_REWARD_DEFAULTS,
   ...ACHIEVEMENTS.map(
     (entry): RewardDefault => ({
       code: achievementRewardCode(entry.code),
