@@ -47,6 +47,8 @@ defaults for the others, listed below, and each can be overridden.
 | `CORS_ORIGIN`                               | none                 | Exact origins, comma separated, no trailing slash.       |
 | `TRUST_PROXY`                               | `false`              | Set `true` only behind a trusted proxy or load balancer. |
 | `LOG_LEVEL`                                 | `info`               |                                                          |
+| `ADMIN_API_KEY`                             | none                 | Turns the admin endpoints on. See "Admin access".        |
+| `ADMIN_RATE_LIMIT_MAX`                      | `20`                 | Admin requests per minute per client (1 to 10000).       |
 
 Never put secrets in the image or in the repository.
 
@@ -83,23 +85,89 @@ the app sends the purchase token to `POST /api/payments/google-play/verify`.
 The server checks it with Google, adds the gems once and then consumes
 the purchase so it can be bought again.
 
+## Scheduled jobs
+
+Two jobs must run on a schedule. Run each one with the same image and
+environment as the `runtime` container. Both print one JSON line with
+the counts, exit with code 1 when something failed (so the scheduler can
+alert you), and are safe to run any number of times.
+
+| Job                  | Command                                       | How often  |
+| -------------------- | --------------------------------------------- | ---------- |
+| Event rewards        | `node dist/scripts/finalize-events.js`        | Every hour |
+| Refund sync          | `node dist/scripts/sync-voided-purchases.js`  | Every day  |
+
+If a job fails, the next run tries again. Nothing is paid or taken back
+twice.
+
+### Event rewards
+
+Weekly events run from Monday to Monday (UTC) and are created
+automatically. When an event has ended, this job pays the rank rewards
+and sends each player a notification with the result. Without this job,
+ended events never pay out.
+
 ### Refunds
 
 When Google refunds or charges back a purchase, the gems must be taken
-back. Run this once a day, using the same image and environment as the
-`runtime` container:
-
-```bash
-node dist/scripts/sync-voided-purchases.js
-```
-
-It prints one JSON line with the counts, and exits with code 1 if it
-fails. It is safe to run any number of times. It takes back only the
-gems still in the wallet. What the player already spent is not
-recovered, and the missing amount is saved on the payment record under
-`metadata.refund` so support can see it.
+back. The refund sync job asks Google for refunded purchases and takes
+back only the gems still in the wallet. What the player already spent is
+not recovered, and the missing amount is saved on the payment record
+under `metadata.refund` so support can see it. The admin endpoint
+`GET /api/admin/refunds/unrecovered` lists these cases.
 
 Optional: `VOIDED_PURCHASES_LOOKBACK_DAYS` (1 to 30, default 28).
+
+## Admin access
+
+Admin endpoints help support: look up a player, suspend or reactivate
+an account, adjust a wallet by hand, and list refunds that could not be
+taken back in full. They are protected by one secret key.
+
+- Without `ADMIN_API_KEY` the admin endpoints do not exist (they answer
+  `404`).
+- The key must be at least 32 random characters. A shorter key stops the
+  server from starting.
+- Send the key in the `x-admin-key` header.
+- Every admin change is written to the audit log with its reason.
+- Admin requests have their own strict rate limit
+  (`ADMIN_RATE_LIMIT_MAX`, default 20 per minute).
+
+Create a key with:
+
+```bash
+openssl rand -base64 48
+```
+
+Keep the key in a secret store, never in the repository. To change it,
+set a new value and restart the server.
+
+Where possible, also allow `/api/admin/` only from your own network at
+the reverse proxy, so the admin endpoints are not reachable from the
+public internet.
+
+Endpoints:
+
+| Method | Path                                      | Purpose                                  |
+| ------ | ----------------------------------------- | ---------------------------------------- |
+| GET    | `/api/admin/users/lookup?email=` or `?id=` | Account, wallet and activity summary.    |
+| POST   | `/api/admin/users/:id/suspend`            | Suspend and log the player out. Needs `reason`. |
+| POST   | `/api/admin/users/:id/reactivate`         | Allow the player to log in again. Needs `reason`. |
+| POST   | `/api/admin/users/:id/wallet-adjust`      | Add or remove TOKEN or GEM. Needs `currency`, `direction`, `amount`, `reason`, `requestId`. |
+| GET    | `/api/admin/refunds/unrecovered?limit=`   | Refunds that were only partly taken back. |
+
+For a wallet adjustment, send a new unique `requestId` each time. Sending
+the same `requestId` again does not apply the change twice, so a retry
+after a network error is safe. One adjustment is limited to 100000.
+
+Example:
+
+```bash
+curl -X POST https://api.example.com/api/admin/users/<userId>/wallet-adjust \
+  -H "x-admin-key: $ADMIN_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"currency":"GEM","direction":"CREDIT","amount":25,"reason":"Compensation for a bug","requestId":"fix-2026-11-02-001"}'
+```
 
 ## Releasing a version
 
@@ -132,4 +200,3 @@ the previous version of the server keeps working while they are applied.
 - `package-lock.json` is committed. CI and Docker both use `npm ci`, so
   every build installs exactly the same packages. To refresh the lock
   file, run the "Generate package-lock" workflow from the Actions tab.
-
