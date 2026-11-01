@@ -87,18 +87,19 @@ the purchase so it can be bought again.
 
 ## Scheduled jobs
 
-Two jobs must run on a schedule. Run each one with the same image and
-environment as the `runtime` container. Both print one JSON line with
-the counts, exit with code 1 when something failed (so the scheduler can
-alert you), and are safe to run any number of times.
+Three jobs must run on a schedule. Run each one with the same image and
+environment as the `runtime` container. Each prints one JSON line with
+the counts, exits with code 1 when something failed (so the scheduler can
+alert you), and is safe to run any number of times.
 
 | Job                  | Command                                       | How often  |
 | -------------------- | --------------------------------------------- | ---------- |
 | Event rewards        | `node dist/scripts/finalize-events.js`        | Every hour |
 | Refund sync          | `node dist/scripts/sync-voided-purchases.js`  | Every day  |
+| Notification cleanup | `node dist/scripts/purge-notifications.js`    | Every day  |
 
-If a job fails, the next run tries again. Nothing is paid or taken back
-twice.
+If a job fails, the next run tries again. Nothing is paid, taken back or
+deleted twice.
 
 ### Event rewards
 
@@ -117,6 +118,14 @@ under `metadata.refund` so support can see it. The admin endpoint
 `GET /api/admin/refunds/unrecovered` lists these cases.
 
 Optional: `VOIDED_PURCHASES_LOOKBACK_DAYS` (1 to 30, default 28).
+
+### Notification cleanup
+
+Deletes notifications that players have already read and that are older
+than the retention period. Unread notifications are never deleted.
+Without this job the notification table only grows.
+
+Optional: `NOTIFICATION_RETENTION_DAYS` (1 to 3650, default 90).
 
 ## Admin access
 
